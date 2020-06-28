@@ -14,6 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.conf.urls.static import static
 from django.urls import path, include
 from rest_framework_swagger.views import get_swagger_view
 
@@ -24,3 +25,4 @@ urlpatterns = [
     path('swagger/', schema_view),
     path('api/matlab/', include('matlab_api.api.urls')),
 ]
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
