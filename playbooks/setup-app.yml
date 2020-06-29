@@ -1,0 +1,177 @@
+---
+- name: Configure Webs Server
+  hosts: vultr
+  vars:
+    user: idare
+    group: idare
+    ansible_python_interpreter: /usr/bin/python3
+    venv_dir: venv
+    app_dir: /home/app-matlab
+    venv_location: "/home/idare/.local/bin/virtualenv"
+
+  tasks:
+    - name: Show hostnames
+      debug:
+        msg: "System {{ inventory_hostname }} has uuid {{ ansible_product_uuid }} and hostname {{ ansible_hostname }}, {{ ansible_nodename }} "
+
+    - name: Show ip address of the host
+      debug:
+        msg: "System has IP address {{ ansible_default_ipv4.address }}, {{ ansible_all_ipv4_addresses }}"
+
+    - name: Show eth0 ip address
+      debug:
+        msg: "eth0 ip address: {{ ansible_eth0.ipv4.address }}"
+      when: ansible_eth0 is defined
+
+    - name: Show application parent directory name
+      debug:
+        msg: "Home directory: {{ ansible_env.HOME }}"
+
+    - name: Update apt repo and cache
+      become: True
+      apt: update_cache=yes force_apt_get=yes
+
+    - name: Install required packages
+      become: True
+      apt:
+        state: present
+        update_cache: yes
+        name:
+          - build-essential
+          - python3
+          - python3-pip
+          - python3-setuptools
+          - python3-dev
+          - libpq-dev
+          - nginx
+          - gcc
+          - nano
+          - rsync
+
+    - name: Create app directory
+      become: True
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ group }}"
+
+    - name: Create app log directory
+      become: True
+      file:
+        path: "/var/{{ item }}"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ group }}"
+        mode: 0755
+      loop:
+        - log/app/
+
+    - name: Configure gunicorn socket
+      become: True
+      template:
+        src: app-matlab.socket.j2
+        dest: /etc/systemd/system/app-matlab.socket
+
+    - name: Configure gunicorn as service
+      become: True
+      template:
+        src: app-matlab.service.j2
+        dest: /etc/systemd/system/app-matlab.service
+
+    - name: Configure nginx for idare
+      become: True
+      template:
+        src: idare-abaqus.j2
+        dest: /etc/nginx/sites-available/idare-matlab
+
+    - name: Copy requirements.txt
+      copy:
+        src: ../requirements.txt
+        dest: "{{ app_dir }}/requirements.txt"
+        mode: '0644'
+
+    - name: Sync Codebase
+      synchronize:
+        src: ../src/
+        dest: "{{ app_dir }}/src"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=__pycache__"
+          - "--exclude=local_settings.py"
+
+    - name: Install virtualenv via pip
+      pip:
+        name: virtualenv
+        executable: pip3
+
+    - name: Create virtualenv and install gunicorn pip packages
+      pip:
+        name: gunicorn
+        state: latest
+        virtualenv: "{{ app_dir }}/venv"
+        virtualenv_command: "{{ venv_location }}"
+        extra_args: "--no-cache-dir"
+
+    - name: Configure venv and intstall pip packages
+      pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ app_dir }}/venv"
+        virtualenv_python: python3
+        virtualenv_command: "{{ venv_location }}"
+
+    - name: Make executable
+      become: True
+      file:
+        path: "{{ app_dir }}/src/manage.py"
+        mode: 0777
+
+    - name: Django generate staticfiles
+      django_manage:
+        command: collectstatic
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Django makemigrations
+      django_manage:
+        command: makemigrations
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Django migrate
+      django_manage:
+        command: migrate
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Configure gunicorn and test
+      become: True
+      shell: "{{ item }}"
+      loop:
+        - systemctl daemon-reload
+        - systemctl enable app-abaqus
+        - systemctl start app-abaqus
+        - systemctl status app-abaqus
+
+    - name: Enable idare nginx service
+      become: True
+      file:
+        src: /etc/nginx/sites-available/idare-abaqus
+        dest: /etc/nginx/sites-enabled/idare-abaqus
+        state: link
+
+    - name: Allow all access to tcp port 8080
+      become: True
+      ufw:
+        rule: allow
+        port: '8080'
+        proto: tcp
+
+    - name: Restart nginx and allow required port
+      become: True
+      shell: "{{ item }}"
+      loop:
+        - nginx -t
+        - systemctl restart nginx
+        - ufw allow 'Nginx Full'
+

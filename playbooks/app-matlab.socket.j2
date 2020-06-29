@@ -1,0 +1,8 @@
+[Unit]
+Description=gunicorn app-matlab socket
+
+[Socket]
+ListenStream=/run/app-matlab.sock
+
+[Install]
+WantedBy=sockets.target

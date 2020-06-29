@@ -30,23 +30,26 @@ ALLOWED_HOSTS = ['192.168.10.10', '149.28.151.64']
 
 # Application definition
 
-INSTALLED_APPS = [
+DEFAULT_APPS = (
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+)
 
-    # third party app
+THIRD_PARTY_APPS = (
     'django_extensions',
     'rest_framework',
     'rest_framework_swagger',
+)
 
-
-    # Custom Apps
+LOCAL_APPS = (
     'matlab_api',
-]
+)
+
+INSTALLED_APPS = DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

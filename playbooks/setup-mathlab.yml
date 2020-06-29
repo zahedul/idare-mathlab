@@ -1,0 +1,100 @@
+---
+- name: Configure Webs Server
+  hosts: vultr
+  vars:
+    user: idare
+    group: idare
+    ansible_python_interpreter: /usr/bin/python3
+    venv_dir: venv
+    app_dir: /home/app
+    host_name: idare-abaqus
+
+  tasks:
+    - name: Show hostnames
+      debug:
+        msg: "System {{ inventory_hostname }} has uuid {{ ansible_product_uuid }} and hostname {{ ansible_hostname }}, {{ ansible_nodename }} "
+
+    - name: Show ip address of the host
+      debug:
+        msg: "System has IP address {{ ansible_default_ipv4.address }}, {{ ansible_all_ipv4_addresses }}"
+
+    - name: Show eth0 ip address
+      debug:
+        msg: "eth0 ip address: {{ ansible_eth0.ipv4.address }}"
+      when: ansible_eth0 is defined
+
+    - name: Show application parent directory name
+      debug:
+        msg: "Home directory: {{ ansible_env.HOME }}"
+
+    - name: Update apt repo and cache
+      become: True
+      apt: update_cache=yes force_apt_get=yes
+
+    - name: Install required packages
+      become: True
+      apt: 
+        state: present
+        update_cache: yes
+        name:
+          - build-essential
+          - gcc
+          - g++
+          - gfortran
+          - csh
+          - tcsh
+          - libstdc++5
+          - build-essential
+          - make
+          - libjpeg62
+          - default-jre
+          - libcanberra-gtk-module
+          - libcanberra-gtk3-module
+          - unzip
+          - xauth
+          - x11-apps
+
+    - name: Create app directory
+      become: True
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ group }}"
+
+    - name: download from google storage
+      get_url:
+        url: "https://storage.googleapis.com/idare-dependancy-package/abacus/abaqus.tar.gz"
+        dest: "{{ app_dir }}"
+
+    - name: Copy sample abaqus
+      copy:
+        src: ../dependancy/abaqus_run_files.tar.xz
+        dest: abaqus_run_files.tar.xz
+
+    - name: Copy license key
+      template:
+        src: ../dependancy/ABAQUS.lic.j2
+        dest: ABAQUS.lic
+
+    - name: fix libc link issue
+      become: True
+      file:
+        src: /lib/x86_64-linux-gnu/libc.so.6
+        dest: /lib/libc.so.6
+        state: link
+
+    - name: Create tmp directory for abaqus
+      become: True
+      file:
+        path: /usr/tmp
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: 0777
+
+    - name: Create abaqus server location
+      become: True
+      file:
+        path: /opt/simulia
+        state: directory

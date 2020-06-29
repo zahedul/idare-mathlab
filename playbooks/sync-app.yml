@@ -1,0 +1,70 @@
+---
+- name: Configure Webs Server
+  hosts: vultr
+  vars:
+    user: idare
+    group: idare
+    ansible_python_interpreter: /usr/bin/python3
+    venv_dir: venv
+    app_dir: /home/app-abaqus
+    venv_location: "/home/idare/.local/bin/virtualenv"
+
+  tasks:
+    - name: Show hostnames
+      debug:
+        msg: "System {{ inventory_hostname }} has uuid {{ ansible_product_uuid }} and hostname {{ ansible_hostname }}, {{ ansible_nodename }} "
+
+    - name: Show ip address of the host
+      debug:
+        msg: "System has IP address {{ ansible_default_ipv4.address }}, {{ ansible_all_ipv4_addresses }}"
+
+    - name: Show eth0 ip address
+      debug:
+        msg: "eth0 ip address: {{ ansible_eth0.ipv4.address }}"
+      when: ansible_eth0 is defined
+
+    - name: Show application parent directory name
+      debug:
+        msg: "Home directory: {{ ansible_env.HOME }}"
+
+    - name: Copy requirements.txt
+      copy:
+        src: ../requirements.txt
+        dest: "{{ app_dir }}/requirements.txt"
+        mode: '0644'
+
+    - name: Sync Codebase
+      synchronize:
+        src: ../src/
+        dest: "{{ app_dir }}/src"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=__pycache__"
+          - "--exclude=local_settings.py"
+
+    - name: Django generate staticfiles
+      django_manage:
+        command: collectstatic
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Django makemigrations
+      django_manage:
+        command: makemigrations
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Django migrate
+      django_manage:
+        command: migrate
+        virtualenv: "{{ app_dir }}/venv"
+        app_path: "{{ app_dir }}/src"
+
+    - name: Configure gunicorn and test
+      become: True
+      shell: "{{ item }}"
+      loop:
+        - systemctl daemon-reload
+        - systemctl enable app-abaqus
+        - systemctl restart app-abaqus
+        - systemctl status app-abaqus
