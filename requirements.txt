@@ -10,7 +10,7 @@ djangorestframework==3.9.3
 djangorestframework-stubs==0.4.2
 idna==2.8
 itypes==1.1.0
-Jinja2==2.10.1
+Jinja2==2.11.3
 kiwisolver==1.1.0
 MarkupSafe==1.1.1
 matlab==0.1
